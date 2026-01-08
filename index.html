@@ -26,6 +26,7 @@
 <button id="dashBtn">DASH</button>
 
 <div id="ui">
+  <div>Lives: <span id="lives">3</span></div>
   <div id="dashUI"><div id="dashFill"></div></div>
   <div>Score: <span id="score">0</span></div>
   <div>Best: <span id="best">0</span></div>
@@ -37,6 +38,7 @@
     <p>Select a mode</p>
     <button id="endlessBtn">Endless Mode</button>
     <button id="bossBtn">Boss Rush</button>
+    <button id="extremeBtn">EXTREME BOSS</button>
   </div>
 </div>
 
@@ -65,10 +67,12 @@ let mode = 'endless';
 let bestScore = +localStorage.getItem('neon-best') || 0;
 bestEl.textContent = bestScore;
 
-let player, enemies, powerups, boss, score, running;
+let player, enemies, powerups, boss, score, running, lives;
 let dashCD = 0, dashMax = 60, shake = 0;
 
 function reset(){
+  lives = 3;
+  document.getElementById('lives').textContent = lives;
   player = { x:w/2, y:h/2, r:10, speed:5, shield:0 };
   enemies = [];
   powerups = [];
@@ -79,6 +83,26 @@ function reset(){
 }
 
 function startMode(m){
+  dashBtn.style.display = 'block';
+  mode = m;
+  menu.style.display = 'none';
+  function spawnExtremeBoss(){
+  boss = {
+    x: w/2,
+    y: h/2,
+    r: 60,
+    orbit: 110,
+    angle: 0,
+    extreme: true,
+    orbs: Array.from({length:8},()=>({x:0,y:0,r:12}))
+  };
+}
+
+reset();
+  running = true;
+
+  if(mode==='extremeBoss') spawnExtremeBoss();
+}
   // ensure dash button is visible when game starts
   dashBtn.style.display = 'block';
   mode = m;
@@ -90,6 +114,7 @@ function startMode(m){
 // ===== MENU BUTTONS =====
 document.getElementById('endlessBtn').onclick = () => startMode('endless');
 document.getElementById('bossBtn').onclick = () => startMode('boss');
+document.getElementById('extremeBtn').onclick = () => startMode('extremeBoss'); () => startMode('boss');
 
 // ===== INPUT =====
 let keys = {};
@@ -148,6 +173,7 @@ dashBtn.addEventListener('mousedown', dash);
 
 // ===== GAME LOOP =====
 function spawnEnemy(){
+  if(mode==='extremeBoss') return;
   const edge = Math.floor(Math.random()*4);
   let x,y;
   if(edge===0){x=Math.random()*w;y=-20}
@@ -159,6 +185,16 @@ function spawnEnemy(){
 }
 
 function update(){
+  if(!running) return;
+
+  if(boss && boss.extreme){
+    boss.angle += 0.03;
+    boss.orbs.forEach((o,i)=>{
+      const a = boss.angle + (Math.PI*2/boss.orbs.length)*i;
+      o.x = boss.x + Math.cos(a)*boss.orbit;
+      o.y = boss.y + Math.sin(a)*boss.orbit;
+    });
+  }
   if(!running) return;
 
   if(dashCD>0) dashCD--;
@@ -179,7 +215,7 @@ function update(){
 
   enemies.forEach(e => {
     e.x += e.vx; e.y += e.vy;
-    if(Math.hypot(e.x-player.x, e.y-player.y) < e.r + player.r) gameOver();
+    if(Math.hypot(e.x-player.x, e.y-player.y) < e.r + player.r) loseLife()();
   });
 
   score++;
@@ -187,6 +223,24 @@ function update(){
 }
 
 function draw(){
+  ctx.setTransform(1,0,0,1,(Math.random()-.5)*shake,(Math.random()-.5)*shake);
+  ctx.clearRect(-20,-20,w+40,h+40);
+  ctx.fillStyle='#000'; ctx.fillRect(0,0,w,h);
+
+  if(boss && boss.extreme){
+    ctx.beginPath();
+    ctx.arc(boss.x,boss.y,boss.r,0,Math.PI*2);
+    ctx.fillStyle='#ff00ff';
+    ctx.shadowBlur=30; ctx.shadowColor='#ff00ff';
+    ctx.fill(); ctx.shadowBlur=0;
+
+    boss.orbs.forEach(o=>{
+      ctx.beginPath();
+      ctx.arc(o.x,o.y,o.r,0,Math.PI*2);
+      ctx.fillStyle='#ff4444';
+      ctx.fill();
+    });
+  }
   ctx.setTransform(1,0,0,1,(Math.random()-.5)*shake,(Math.random()-.5)*shake);
   ctx.clearRect(-20,-20,w+40,h+40);
   ctx.fillStyle='#000'; ctx.fillRect(0,0,w,h);
@@ -206,6 +260,13 @@ function draw(){
 }
 
 function loop(){ update(); draw(); requestAnimationFrame(loop); }
+
+function loseLife(){
+  lives--;
+  document.getElementById('lives').textContent = lives;
+  beep(120,0.3);
+  if(lives<=0){ gameOver(); }
+}
 
 function gameOver(){
   running = false;
