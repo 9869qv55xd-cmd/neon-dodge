@@ -252,6 +252,27 @@ startBtn.onclick = () => {
 reset();
 loop();
 </script>
+  <script>
+/* =======================
+   🔥 FIREBASE CONFIG (HERE)
+   ======================= */
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  appId: "YOUR_APP_ID"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+/* =======================
+   👇 EVERYTHING ELSE BELOW
+   ======================= */
+
+// game code starts here
+const canvas = document.getElementById("game");
+
 
 </body>
 </html>
