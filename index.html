@@ -10,40 +10,51 @@
     #ui{position:fixed;top:16px;left:16px;font-size:14px;opacity:.9;z-index:10}
     #dashUI{position:fixed;bottom:160px;right:50px;width:60px;height:8px;background:rgba(255,255,255,.2);border-radius:4px;overflow:hidden}
     #dashFill{height:100%;width:100%;background:#ff00cc}
+    #center{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;z-index:20;pointer-events:auto}
     #center{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;z-index:20;pointer-events:none}
     #menu{pointer-events:auto}
     button{background:#00f5ff;color:#000;border:none;border-radius:10px;padding:12px 18px;font-size:16px;cursor:pointer;box-shadow:0 0 20px #00f5ff55;margin:6px}
     #joystick{position:fixed;bottom:40px;left:40px;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,.08);display:none;z-index:10}
     #stick{position:absolute;inset:35px;border-radius:50%;background:rgba(0,245,255,.8)}
+    #soundToggle{position:fixed;top:16px;right:16px}
+    #dashBtn{z-index:10;position:fixed;bottom:50px;right:40px;width:90px;height:90px;border-radius:50%;background:rgba(255,0,200,.25);border:2px solid #ff00cc;color:#fff;font-size:14px;font-weight:700;display:none;box-shadow:0 0 25px #ff00cc99}
     #soundToggle{position:fixed;top:16px;right:16px;z-index:10}
     #dashBtn{position:fixed;bottom:50px;right:40px;width:90px;height:90px;border-radius:50%;background:rgba(255,0,200,.25);border:2px solid #ff00cc;color:#fff;font-size:14px;font-weight:700;display:none;box-shadow:0 0 25px #ff00cc99;z-index:10}
   </style>
 </head>
 <body>
-<canvas id="game"></canvas>
-<div id="joystick"><div id="stick"></div></div>
-<button id="soundToggle">🔊</button>
-<button id="dashBtn">DASH</button>
-
-<div id="ui">
-  <div>Lives: <span id="lives">3</span></div>
-  <div id="dashUI"><div id="dashFill"></div></div>
-  <div>Score: <span id="score">0</span></div>
-  <div>Best: <span id="best">0</span></div>
-</div>
-
-<div id="center">
+@@ -34,95 +35,190 @@
   <div id="menu">
     <h1>NEON DODGE</h1>
     <p>Select a mode</p>
+    <button onclick="startMode('endless')">Endless Mode</button>
+    <button onclick="startMode('boss')">Boss Rush</button>
     <button id="endlessBtn">Endless Mode</button>
     <button id="bossBtn">Boss Rush</button>
-    <button id="extremeBtn">EXTREME BOSS</button>
   </div>
 </div>
 
 <script>
 // ===== SETUP =====
+const canvas=document.getElementById('game'),ctx=canvas.getContext('2d');
+const joystick=document.getElementById('joystick'),stick=document.getElementById('stick');
+const dashBtn=document.getElementById('dashBtn');
+const scoreEl=document.getElementById('score'),bestEl=document.getElementById('best');
+const menu=document.getElementById('menu'),soundToggle=document.getElementById('soundToggle');
+let w,h; function resize(){w=canvas.width=innerWidth;h=canvas.height=innerHeight} addEventListener('resize',resize);resize();
+if('ontouchstart'in window){joystick.style.display='block';dashBtn.style.display='block'}
+
+// ===== INPUT =====
+let keys={}; addEventListener('keydown',e=>keys[e.key]=1); addEventListener('keyup',e=>keys[e.key]=0);
+let joyDX=0,joyDY=0;
+joystick.addEventListener('touchmove',e=>{e.preventDefault();const r=joystick.getBoundingClientRect(),t=e.touches[0];joyDX=Math.max(-1,Math.min(1,(t.clientX-(r.left+r.width/2))/40));joyDY=Math.max(-1,Math.min(1,(t.clientY-(r.top+r.height/2))/40));stick.style.transform=`translate(${joyDX*20}px,${joyDY*20}px)`},{passive:false});
+joystick.addEventListener('touchend',()=>{joyDX=joyDY=0;stick.style.transform='translate(0,0)'});
+let tapTarget=null,lastTap=0;canvas.addEventListener('touchstart',e=>{e.preventDefault();const t=e.touches[0];tapTarget={x:t.clientX,y:t.clientY};if(Date.now()-lastTap<280)dash();lastTap=Date.now()},{passive:false});
+
+// ===== AUDIO =====
+let soundOn=true; const audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+function beep(f,d=.08){if(!soundOn)return;const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.connect(g);g.connect(audioCtx.destination);o.frequency.value=f;o.start();g.gain.exponentialRampToValueAtTime(.0001,audioCtx.currentTime+d);o.stop(audioCtx.currentTime+d)}
+soundToggle.onclick=()=>{soundOn=!soundOn;soundToggle.textContent=soundOn?'🔊':'🔇'};
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 const joystick = document.getElementById('joystick');
@@ -63,16 +74,19 @@ joystick.style.display = 'block';
 dashBtn.style.display = 'block';
 
 // ===== GAME STATE =====
+let mode='endless';
+let bestScore=+localStorage.getItem('neon-best')||0;bestEl.textContent=bestScore;
+let player,enemies,powerups,boss,score,running,dashCD=0,dashMax=60,shake=0;
+
+function reset(){player={x:w/2,y:h/2,r:10,speed:5,shield:0,dashPower:1};enemies=[];powerups=[];boss=null;score=0;dashCD=0;shake=0}
 let mode = 'endless';
 let bestScore = +localStorage.getItem('neon-best') || 0;
 bestEl.textContent = bestScore;
 
-let player, enemies, powerups, boss, score, running, lives;
+let player, enemies, powerups, boss, score, running;
 let dashCD = 0, dashMax = 60, shake = 0;
 
 function reset(){
-  lives = 3;
-  document.getElementById('lives').textContent = lives;
   player = { x:w/2, y:h/2, r:10, speed:5, shield:0 };
   enemies = [];
   powerups = [];
@@ -83,26 +97,6 @@ function reset(){
 }
 
 function startMode(m){
-  dashBtn.style.display = 'block';
-  mode = m;
-  menu.style.display = 'none';
-  function spawnExtremeBoss(){
-  boss = {
-    x: w/2,
-    y: h/2,
-    r: 60,
-    orbit: 110,
-    angle: 0,
-    extreme: true,
-    orbs: Array.from({length:8},()=>({x:0,y:0,r:12}))
-  };
-}
-
-reset();
-  running = true;
-
-  if(mode==='extremeBoss') spawnExtremeBoss();
-}
   // ensure dash button is visible when game starts
   dashBtn.style.display = 'block';
   mode = m;
@@ -114,8 +108,8 @@ reset();
 // ===== MENU BUTTONS =====
 document.getElementById('endlessBtn').onclick = () => startMode('endless');
 document.getElementById('bossBtn').onclick = () => startMode('boss');
-document.getElementById('extremeBtn').onclick = () => startMode('extremeBoss'); () => startMode('boss');
 
+function startMode(m){mode=m;menu.style.display='none';reset();running=true}
 // ===== INPUT =====
 let keys = {};
 addEventListener('keydown', e => keys[e.key] = true);
@@ -157,6 +151,58 @@ soundToggle.onclick = () => {
 
 // ===== ACTIONS =====
 function dash(){
+  if(dashCD>0)return;if(dashCD>0)return;const dx=(joyDX||Math.sign((tapTarget?.x||player.x)-player.x));
+  const dy=(joyDY||Math.sign((tapTarget?.y||player.y)-player.y));
+  player.x+=dx*110;player.y+=dy*110;
+  dashCD=dashMax;shake=12;
+  navigator.vibrate?.(80);beep(700)}
+
+function spawnEnemy(){const edge=Math.floor(Math.random()*4);let x,y;if(edge==0){x=Math.random()*w;y=-20}if(edge==1){x=w+20;y=Math.random()*h}if(edge==2){x=Math.random()*w;y=h+20}if(edge==3){x=-20;y=Math.random()*h}const a=Math.atan2(player.y-y,player.x-x);enemies.push({x,y,vx:Math.cos(a)*2.6,vy:Math.sin(a)*2.6,r:8})}
+
+function spawnBoss(){boss={x:w/2,y:-80,r:40,hp:200,phase:0}}
+
+function spawnPowerup(){
+  const type=Math.random()<0.5?'shield':'dash';
+  powerups.push({x:Math.random()*w,y:Math.random()*h,r:8,type,t:600});({x:Math.random()*w,y:Math.random()*h,r:8,type:'shield',t:600})}
+
+// ===== LOOP =====
+function update(){if(!running)return; if(dashCD>0)dashCD--; document.getElementById('dashFill').style.width=((dashMax-dashCD)/dashMax*100)+'%';
+if(tapTarget){const dx=tapTarget.x-player.x,dy=tapTarget.y-player.y,d=Math.hypot(dx,dy);if(d>6){player.x+=dx/d*player.speed;player.y+=dy/d*player.speed}}
+player.x+=joyDX*player.speed;player.y+=joyDY*player.speed;
+if(keys.w||keys.ArrowUp)player.y-=player.speed;if(keys.s||keys.ArrowDown)player.y+=player.speed;if(keys.a||keys.ArrowLeft)player.x-=player.speed;if(keys.d||keys.ArrowRight)player.x+=player.speed;
+player.x=Math.max(player.r,Math.min(w-player.r,player.x));player.y=Math.max(player.r,Math.min(h-player.r,player.y));
+
+// Endless
+if(mode==='endless'){if(score%50==0)spawnEnemy();}
+
+// Boss mode
+if(mode==='boss'&&!boss&&score>120)spawnBoss();
+if(boss){boss.y+=0.4;boss.phase++; if(boss.phase%40==0)spawnEnemy(); if(Math.hypot(boss.x-player.x,boss.y-player.y)<boss.r+player.r){gameOver()}}
+
+enemies.forEach(e=>{e.x+=e.vx;e.y+=e.vy;if(Math.hypot(e.x-player.x,e.y-player.y)<e.r+player.r){if(player.shield>0){player.shield=0;beep(200)}else{gameOver()}}});
+
+powerups.forEach(p=>p.t--); powerups=powerups.filter(p=>p.t>0);
+powerups.forEach(p=>{if(Math.hypot(p.x-player.x,p.y-player.y)<p.r+player.r){
+  if(p.type==='shield'){player.shield=400;beep(900)}
+  if(p.type==='dash'){player.dashPower++;dashMax=Math.max(25,dashMax-6);beep(1200)}
+}});(p.x-player.x,p.y-player.y)<p.r+player.r){player.shield=400;beep(900)}});
+if(player.shield>0)player.shield--;
+
+score++;scoreEl.textContent=score;if(score%600==0)spawnPowerup()}
+
+function draw(){ctx.setTransform(1,0,0,1,(Math.random()-.5)*shake,(Math.random()-.5)*shake);ctx.clearRect(-20,-20,w+40,h+40);ctx.fillStyle='#000';ctx.fillRect(0,0,w,h);
+ctx.beginPath();ctx.arc(player.x,player.y,player.r,0,Math.PI*2);ctx.fillStyle=player.shield>0?'#00ff99':'#00f5ff';ctx.shadowBlur=20;ctx.shadowColor=ctx.fillStyle;ctx.fill();ctx.shadowBlur=0;
+enemies.forEach(e=>{ctx.beginPath();ctx.arc(e.x,e.y,e.r,0,Math.PI*2);ctx.fillStyle='#ff0055';ctx.fill()});
+if(boss){ctx.beginPath();ctx.arc(boss.x,boss.y,boss.r,0,Math.PI*2);ctx.fillStyle='#aa00ff';ctx.fill()}
+if(shake>0)shake--}
+
+function loop(){update();draw();requestAnimationFrame(loop)}
+function gameOver(){running=false;menu.style.display='block';if(score>bestScore){bestScore=score;localStorage.setItem('neon-best',bestScore);bestEl.textContent=bestScore}}
+
+dashBtn.addEventListener('touchstart',e=>{e.preventDefault();dash()},{passive:false});
+dashBtn.addEventListener('mousedown',dash);
+
+reset();loop();
   if (dashCD > 0) return;
   const dx = joyDX || (keys.ArrowRight||keys.d?1:keys.ArrowLeft||keys.a?-1:0);
   const dy = joyDY || (keys.ArrowDown||keys.s?1:keys.ArrowUp||keys.w?-1:0);
@@ -173,7 +219,6 @@ dashBtn.addEventListener('mousedown', dash);
 
 // ===== GAME LOOP =====
 function spawnEnemy(){
-  if(mode==='extremeBoss') return;
   const edge = Math.floor(Math.random()*4);
   let x,y;
   if(edge===0){x=Math.random()*w;y=-20}
@@ -185,16 +230,6 @@ function spawnEnemy(){
 }
 
 function update(){
-  if(!running) return;
-
-  if(boss && boss.extreme){
-    boss.angle += 0.03;
-    boss.orbs.forEach((o,i)=>{
-      const a = boss.angle + (Math.PI*2/boss.orbs.length)*i;
-      o.x = boss.x + Math.cos(a)*boss.orbit;
-      o.y = boss.y + Math.sin(a)*boss.orbit;
-    });
-  }
   if(!running) return;
 
   if(dashCD>0) dashCD--;
@@ -215,7 +250,7 @@ function update(){
 
   enemies.forEach(e => {
     e.x += e.vx; e.y += e.vy;
-    if(Math.hypot(e.x-player.x, e.y-player.y) < e.r + player.r) loseLife()();
+    if(Math.hypot(e.x-player.x, e.y-player.y) < e.r + player.r) gameOver();
   });
 
   score++;
@@ -223,24 +258,6 @@ function update(){
 }
 
 function draw(){
-  ctx.setTransform(1,0,0,1,(Math.random()-.5)*shake,(Math.random()-.5)*shake);
-  ctx.clearRect(-20,-20,w+40,h+40);
-  ctx.fillStyle='#000'; ctx.fillRect(0,0,w,h);
-
-  if(boss && boss.extreme){
-    ctx.beginPath();
-    ctx.arc(boss.x,boss.y,boss.r,0,Math.PI*2);
-    ctx.fillStyle='#ff00ff';
-    ctx.shadowBlur=30; ctx.shadowColor='#ff00ff';
-    ctx.fill(); ctx.shadowBlur=0;
-
-    boss.orbs.forEach(o=>{
-      ctx.beginPath();
-      ctx.arc(o.x,o.y,o.r,0,Math.PI*2);
-      ctx.fillStyle='#ff4444';
-      ctx.fill();
-    });
-  }
   ctx.setTransform(1,0,0,1,(Math.random()-.5)*shake,(Math.random()-.5)*shake);
   ctx.clearRect(-20,-20,w+40,h+40);
   ctx.fillStyle='#000'; ctx.fillRect(0,0,w,h);
@@ -260,13 +277,6 @@ function draw(){
 }
 
 function loop(){ update(); draw(); requestAnimationFrame(loop); }
-
-function loseLife(){
-  lives--;
-  document.getElementById('lives').textContent = lives;
-  beep(120,0.3);
-  if(lives<=0){ gameOver(); }
-}
 
 function gameOver(){
   running = false;
