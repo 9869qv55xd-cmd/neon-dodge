@@ -6,16 +6,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
     html, body { margin:0; padding:0; background:radial-gradient(circle at top,#0f2027,#000); color:#fff; font-family:system-ui,sans-serif; overflow:hidden; touch-action:none; }
-    canvas{display:block}
-    #ui{position:fixed;top:16px;left:16px;font-size:14px;opacity:.9}
+    canvas{display:block;position:fixed;inset:0;z-index:0}
+    #ui{position:fixed;top:16px;left:16px;font-size:14px;opacity:.9;z-index:10}
     #dashUI{position:fixed;bottom:160px;right:50px;width:60px;height:8px;background:rgba(255,255,255,.2);border-radius:4px;overflow:hidden}
     #dashFill{height:100%;width:100%;background:#ff00cc}
-    #center{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;text-align:center}
+    #center{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;z-index:20;pointer-events:auto}
     button{background:#00f5ff;color:#000;border:none;border-radius:10px;padding:12px 18px;font-size:16px;cursor:pointer;box-shadow:0 0 20px #00f5ff55;margin:6px}
-    #joystick{position:fixed;bottom:40px;left:40px;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,.08);display:none}
+    #joystick{position:fixed;bottom:40px;left:40px;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,.08);display:none;z-index:10}
     #stick{position:absolute;inset:35px;border-radius:50%;background:rgba(0,245,255,.8)}
     #soundToggle{position:fixed;top:16px;right:16px}
-    #dashBtn{position:fixed;bottom:50px;right:40px;width:90px;height:90px;border-radius:50%;background:rgba(255,0,200,.25);border:2px solid #ff00cc;color:#fff;font-size:14px;font-weight:700;display:none;box-shadow:0 0 25px #ff00cc99}
+    #dashBtn{z-index:10;position:fixed;bottom:50px;right:40px;width:90px;height:90px;border-radius:50%;background:rgba(255,0,200,.25);border:2px solid #ff00cc;color:#fff;font-size:14px;font-weight:700;display:none;box-shadow:0 0 25px #ff00cc99}
   </style>
 </head>
 <body>
