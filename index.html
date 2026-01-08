@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Neon Dodge</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: radial-gradient(circle at top, #0f2027, #000);
+      color: #fff;
+      font-family: system-ui, sans-serif;
+      overflow: hidden;
+    }
+    canvas {
+      display: block;
+    }
+    #ui {
+      position: fixed;
+      top: 16px;
+      left: 16px;
+      font-size: 14px;
+      opacity: 0.9;
+    }
+    #center {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      pointer-events: none;
+    }
+    button {
+      pointer-events: auto;
+      background: #00f5ff;
+      color: #000;
+      border: none;
+      border-radius: 8px;
+      padding: 12px 18px;
+      font-size: 16px;
+      cursor: pointer;
+      box-shadow: 0 0 20px #00f5ff55;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <div id="ui">
+    <div>Score: <span id="score">0</span></div>
+    <div>Best: <span id="best">0</span></div>
+  </div>
+
+  <div id="center">
+    <div id="menu">
+      <h1>NEON DODGE</h1>
+      <p>Dodge the incoming energy orbs.<br/>Move with WASD / Arrow keys.</p>
+      <button id="start">Start Game</button>
+    </div>
+  </div>
+
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+const scoreEl = document.getElementById('score');
+const bestEl = document.getElementById('best');
+const startBtn = document.getElementById('start');
+const menu = document.getElementById('menu');
+
+let w, h;
+function resize() {
+  w = canvas.width = window.innerWidth;
+  h = canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+let keys = {};
+window.addEventListener('keydown', e => keys[e.key] = true);
+window.addEventListener('keyup', e => keys[e.key] = false);
+
+let bestScore = localStorage.getItem('neon-best') || 0;
+bestEl.textContent = bestScore;
+
+let player, enemies, particles, score, running;
+
+function reset() {
+  player = {
+    x: w / 2,
+    y: h / 2,
+    r: 10,
+    speed: 5
+  };
+  enemies = [];
+  particles = [];
+  score = 0;
+}
+
+function spawnEnemy() {
+  const edge = Math.floor(Math.random() * 4);
+  let x, y;
+  if (edge === 0) { x = Math.random() * w; y = -20; }
+  if (edge === 1) { x = w + 20; y = Math.random() * h; }
+  if (edge === 2) { x = Math.random() * w; y = h + 20; }
+  if (edge === 3) { x = -20; y = Math.random() * h; }
+
+  const angle = Math.atan2(player.y - y, player.x - x);
+  enemies.push({
+    x, y,
+    vx: Math.cos(angle) * (2 + score * 0.01),
+    vy: Math.sin(angle) * (2 + score * 0.01),
+    r: 8
+  });
+}
+
+function explode(x, y, color) {
+  for (let i = 0; i < 20; i++) {
+    particles.push({
+      x, y,
+      vx: (Math.random() - 0.5) * 6,
+      vy: (Math.random() - 0.5) * 6,
+      life: 30,
+      color
+    });
+  }
+}
+
+function update() {
+  if (!running) return;
+
+  // Player movement
+  if (keys['w'] || keys['ArrowUp']) player.y -= player.speed;
+  if (keys['s'] || keys['ArrowDown']) player.y += player.speed;
+  if (keys['a'] || keys['ArrowLeft']) player.x -= player.speed;
+  if (keys['d'] || keys['ArrowRight']) player.x += player.speed;
+
+  player.x = Math.max(player.r, Math.min(w - player.r, player.x));
+  player.y = Math.max(player.r, Math.min(h - player.r, player.y));
+
+  // Enemies
+  enemies.forEach(e => {
+    e.x += e.vx;
+    e.y += e.vy;
+  });
+
+  // Collisions
+  for (let e of enemies) {
+    const dx = e.x - player.x;
+    const dy = e.y - player.y;
+    if (Math.hypot(dx, dy) < e.r + player.r) {
+      explode(player.x, player.y, '#ff0055');
+      gameOver();
+      return;
+    }
+  }
+
+  // Particles
+  particles.forEach(p => {
+    p.x += p.vx;
+    p.y += p.vy;
+    p.life--;
+  });
+  particles = particles.filter(p => p.life > 0);
+
+  score++;
+  scoreEl.textContent = score;
+
+  if (score % 60 === 0) spawnEnemy();
+}
+
+function draw() {
+  ctx.clearRect(0, 0, w, h);
+
+  // Glow background
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, w, h);
+
+  // Player
+  ctx.beginPath();
+  ctx.arc(player.x, player.y, player.r, 0, Math.PI * 2);
+  ctx.fillStyle = '#00f5ff';
+  ctx.shadowBlur = 20;
+  ctx.shadowColor = '#00f5ff';
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  // Enemies
+  enemies.forEach(e => {
+    ctx.beginPath();
+    ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2);
+    ctx.fillStyle = '#ff0055';
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = '#ff0055';
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  });
+
+  // Particles
+  particles.forEach(p => {
+    ctx.globalAlpha = p.life / 30;
+    ctx.fillStyle = p.color;
+    ctx.fillRect(p.x, p.y, 3, 3);
+    ctx.globalAlpha = 1;
+  });
+}
+
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+function gameOver() {
+  running = false;
+  menu.style.display = 'block';
+
+  if (score > bestScore) {
+    bestScore = score;
+    localStorage.setItem('neon-best', bestScore);
+    bestEl.textContent = bestScore;
+  }
+}
+
+startBtn.onclick = () => {
+  reset();
+  enemies = [];
+  running = true;
+  menu.style.display = 'none';
+};
+
+reset();
+loop();
+</script>
+</body>
+</html>
