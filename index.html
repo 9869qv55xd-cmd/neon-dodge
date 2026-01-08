@@ -56,7 +56,7 @@
   <div id="center">
     <div id="menu">
       <h1>NEON DODGE</h1>
-      <p>Dodge the incoming energy orbs.<br/>Move with WASD / Arrow keys.</p>
+      <p>Dodge the incoming energy orbs.<br/>Move with WASD / Arrow keys or touch.</p>
       <button id="start">Start Game</button>
     </div>
   </div>
@@ -81,6 +81,20 @@ resize();
 let keys = {};
 window.addEventListener('keydown', e => keys[e.key] = true);
 window.addEventListener('keyup', e => keys[e.key] = false);
+
+// Touch controls
+let touchTarget = null;
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  const t = e.touches[0];
+  touchTarget = { x: t.clientX, y: t.clientY };
+});
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  const t = e.touches[0];
+  touchTarget = { x: t.clientX, y: t.clientY };
+});
+canvas.addEventListener('touchend', () => touchTarget = null);
 
 let bestScore = localStorage.getItem('neon-best') || 0;
 bestEl.textContent = bestScore;
@@ -132,13 +146,23 @@ function update() {
   if (!running) return;
 
   // Player movement
-  if (keys['w'] || keys['ArrowUp']) player.y -= player.speed;
-  if (keys['s'] || keys['ArrowDown']) player.y += player.speed;
-  if (keys['a'] || keys['ArrowLeft']) player.x -= player.speed;
-  if (keys['d'] || keys['ArrowRight']) player.x += player.speed;
+if (touchTarget) {
+  const dx = touchTarget.x - player.x;
+  const dy = touchTarget.y - player.y;
+  const dist = Math.hypot(dx, dy);
+  if (dist > 1) {
+    player.x += (dx / dist) * player.speed;
+    player.y += (dy / dist) * player.speed;
+  }
+}
 
-  player.x = Math.max(player.r, Math.min(w - player.r, player.x));
-  player.y = Math.max(player.r, Math.min(h - player.r, player.y));
+if (keys['w'] || keys['ArrowUp']) player.y -= player.speed;
+if (keys['s'] || keys['ArrowDown']) player.y += player.speed;
+if (keys['a'] || keys['ArrowLeft']) player.x -= player.speed;
+if (keys['d'] || keys['ArrowRight']) player.x += player.speed;
+
+player.x = Math.max(player.r, Math.min(w - player.r, player.x));
+player.y = Math.max(player.r, Math.min(h - player.r, player.y));(player.r, Math.min(h - player.r, player.y));
 
   // Enemies
   enemies.forEach(e => {
@@ -236,3 +260,4 @@ loop();
 </script>
 </body>
 </html>
+
